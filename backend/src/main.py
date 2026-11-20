@@ -13,6 +13,7 @@ from .claim_service import obj,get,audit,claim_view,submit,inspect,adjudicate
 from .middlewares import RequestTrace,Recovery
 from .fulfilment_routes import router as fulfilment_router
 from .workshop_routes import router as workshop_router
+from .sample_routes import router as sample_router
 from scripts.seed_demo import seed
 logging.basicConfig(level=logging.INFO)
 r=Redis.from_url(os.getenv('REDIS_URL','redis://redis:6379/0'),decode_responses=True)
@@ -27,6 +28,7 @@ app=FastAPI(title='耕川 · 质保田间档案',lifespan=lifespan)
 app.add_middleware(RequestTrace);app.add_middleware(Recovery)
 app.include_router(fulfilment_router)
 app.include_router(workshop_router)
+app.include_router(sample_router)
 @app.exception_handler(IntegrityError)
 async def duplicate(request,e):return JSONResponse({'detail':'编号已存在或关联数据不合法'},status_code=409)
 @app.get('/health')
@@ -67,7 +69,7 @@ def assess_claim(id:int,u=Depends(current)):
     allow(u,'admin','assessor')
     with Session.begin() as s:
         c=get(s,Claim,id)
-        if c.historical or c.status not in ['submitted','failed']:raise HTTPException(409,'当前索赔状态不可分流')
+        if c.historical or c.status not in ['submitted','failed','recall']:raise HTTPException(409,'当前索赔状态不可分流')
         if c.hours_at_failure>s.get(Machine,c.machine_id).warranty_hours:
             c.status='out_of_warranty';c.assessment_note='超出质保工时';audit(s,u,'warranty_rejected',c.code)
         else:c.status='queued';audit(s,u,'risk_queued',c.code)

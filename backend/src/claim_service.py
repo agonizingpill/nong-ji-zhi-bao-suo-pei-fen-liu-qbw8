@@ -2,6 +2,7 @@ from datetime import datetime,timezone
 from fastapi import HTTPException
 from sqlalchemy import select
 from .models import Machine,Claim,Inspection,Audit
+from .quarantine_models import RiskScore,RiskScoreSample,SampleQuarantine
 
 def obj(x):return {c.name:getattr(x,c.name) for c in x.__table__.columns}
 def get(s,model,id):
@@ -25,8 +26,14 @@ def inspect(s,c,data,u):
     else:i.findings=data.findings;i.evidence_complete=data.evidence_complete
     audit(s,u,'inspection_updated',c.code);s.flush();return obj(i)
 def adjudicate(s,c,decision,u):
-    if c.status=='out_of_warranty':raise HTTPException(409,'机具故障工时已过保，不允许质保赔付')
-    if c.status!='assessed':raise HTTPException(409,'索赔须完成风险分流，且不可重复裁决')
+    cur=s.scalar(select(Claim.status).where(Claim.id==c.id).with_for_update())
+    if cur=='out_of_warranty':raise HTTPException(409,'机具故障工时已过保，不允许质保赔付')
+    if cur=='recall':raise HTTPException(409,'评分已因样本隔离撤回，需重新分流计算后才能签赔')
+    if cur!='assessed':raise HTTPException(409,'索赔须完成风险分流，且不可重复裁决')
+    score=s.scalar(select(RiskScore).where(RiskScore.claim_id==c.id,RiskScore.state=='valid').order_by(RiskScore.id.desc()))
+    if not score:raise HTTPException(409,'旧评分查不到样本溯源，需重新分流计算后才能签赔')
+    tainted=s.scalar(select(RiskScoreSample.score_id).join(SampleQuarantine,SampleQuarantine.claim_id==RiskScoreSample.sample_id).where(RiskScoreSample.score_id==score.id))
+    if tainted:raise HTTPException(409,'评分引用的历史样本已被隔离，需重新分流计算后才能签赔')
     i=s.scalar(select(Inspection).where(Inspection.claim_id==c.id))
     if not i:raise HTTPException(409,'必须先记录拆检意见')
     if decision=='paid' and c.risk is not None and c.risk>=.5 and not i.evidence_complete:raise HTTPException(409,'高争议风险索赔必须补齐拆检证据后才能赔付')

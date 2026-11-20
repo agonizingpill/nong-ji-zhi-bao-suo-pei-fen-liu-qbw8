@@ -8,10 +8,12 @@ from src.settlement_models import Settlement
 from src.repair_models import RepairBay,RepairAppointment
 from src.spare_models import SpareStock,PartIssue
 from src.followup_models import RepairFollowup
+from src.quarantine_models import QuarantineMeta,RiskScore,SampleQuarantine
 
 def seed():
     Base.metadata.create_all(engine)
     with Session.begin() as s:
+        if not s.get(QuarantineMeta,1):s.add(QuarantineMeta(id=1,epoch=0))
         for role in ['admin','assessor','viewer']:
             if not s.scalar(select(User).where(User.email==f'{role}@gengchuan.local')):s.add(User(email=f'{role}@gengchuan.local',password=password_hash('Field2026!'),role=role))
         for serial,model,hours in [('GC-2408','Paddy-90',860),('GC-2412','Dryland-120',1120),('GC-EXPIRED','Paddy-90',2450)]:
@@ -43,5 +45,5 @@ def seed():
         for code,part,qty in [('SP-HYD-01','hydraulic',20),('SP-ENG-01','engine',5),('SP-TRANS-01','transmission',3)]:
             if not s.scalar(select(SpareStock).where(SpareStock.code==code)):s.add(SpareStock(code=code,part=part,available_qty=qty))
     with Session() as s:
-        print(json.dumps({k:s.scalar(select(func.count()).select_from(v)) for k,v in [('users',User),('machines',Machine),('claims',Claim),('inspections',Inspection),('part_returns',PartReturn),('settlements',Settlement),('repair_bays',RepairBay),('repair_appointments',RepairAppointment),('spare_stocks',SpareStock),('part_issues',PartIssue),('repair_followups',RepairFollowup)]}))
+        print(json.dumps({k:s.scalar(select(func.count()).select_from(v)) for k,v in [('users',User),('machines',Machine),('claims',Claim),('inspections',Inspection),('part_returns',PartReturn),('settlements',Settlement),('repair_bays',RepairBay),('repair_appointments',RepairAppointment),('spare_stocks',SpareStock),('part_issues',PartIssue),('repair_followups',RepairFollowup),('risk_scores',RiskScore),('sample_quarantines',SampleQuarantine)]}))
 if __name__=='__main__':seed()

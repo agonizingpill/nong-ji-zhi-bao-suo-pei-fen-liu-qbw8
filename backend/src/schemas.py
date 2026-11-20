@@ -21,3 +21,6 @@ class InspectionIn(BaseModel):
     evidence_complete:bool
 class DecisionIn(BaseModel):
     decision:Literal['paid','denied']
+class QuarantineIn(BaseModel):
+    code:str=Field(min_length=2,max_length=60)
+    reason:str=Field(min_length=4,max_length=500)
